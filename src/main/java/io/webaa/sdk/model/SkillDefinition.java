@@ -2,6 +2,7 @@ package io.webaa.sdk.model;
 
 import io.webaa.sdk.skill.SkillExecutor;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -16,6 +17,7 @@ public class SkillDefinition {
     private final String executionMode; // "sdk" | "backend"
     private final SkillExecutor executor;
     private final SkillCachePolicy cachePolicy;
+    private final List<Map<String, Object>> resultCacheFields;
 
     private SkillDefinition(Builder builder) {
         this.name = builder.name;
@@ -24,6 +26,7 @@ public class SkillDefinition {
         this.executionMode = builder.executionMode;
         this.executor = builder.executor;
         this.cachePolicy = builder.cachePolicy;
+        this.resultCacheFields = builder.resultCacheFields;
     }
 
     public String getName() { return name; }
@@ -32,6 +35,7 @@ public class SkillDefinition {
     public String getExecutionMode() { return executionMode; }
     public SkillExecutor getExecutor() { return executor; }
     public SkillCachePolicy getCachePolicy() { return cachePolicy; }
+    public List<Map<String, Object>> getResultCacheFields() { return resultCacheFields; }
 
     public static Builder builder(String name, Map<String, Object> schema, SkillExecutor executor) {
         return new Builder(name, schema, executor);
@@ -44,6 +48,7 @@ public class SkillDefinition {
         private String promptInjection;
         private String executionMode = "sdk";
         private SkillCachePolicy cachePolicy = SkillCachePolicy.disabled();
+        private List<Map<String, Object>> resultCacheFields;
 
         private Builder(String name, Map<String, Object> schema, SkillExecutor executor) {
             this.name = name;
@@ -63,6 +68,11 @@ public class SkillDefinition {
 
         public Builder cachePolicy(SkillCachePolicy cachePolicy) {
             this.cachePolicy = cachePolicy;
+            return this;
+        }
+
+        public Builder resultCacheFields(List<Map<String, Object>> resultCacheFields) {
+            this.resultCacheFields = resultCacheFields;
             return this;
         }
 

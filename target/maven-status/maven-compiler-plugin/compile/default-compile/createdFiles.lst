@@ -1,10 +1,13 @@
 io/webaa/sdk/internal/SSEParser.class
 io/webaa/sdk/skill/SkillExecutor.class
+io/webaa/sdk/WebAASDK$9.class
 io/webaa/sdk/model/ChannelConfig.class
 io/webaa/sdk/WebAASDK$4.class
 io/webaa/sdk/cache/SkillCache.class
 io/webaa/sdk/WebAASDK$2.class
 io/webaa/sdk/exception/WebAAException.class
+io/webaa/sdk/WebAASDK$7.class
+io/webaa/sdk/internal/SSEParser$ParseResult.class
 io/webaa/sdk/model/SkillDefinition$Builder.class
 io/webaa/sdk/model/UserIdentity.class
 io/webaa/sdk/cache/SkillCache$1.class
@@ -17,6 +20,7 @@ io/webaa/sdk/model/SkillDefinition$1.class
 io/webaa/sdk/cache/SkillCache$Freshness.class
 io/webaa/sdk/model/SkillCachePolicy$Mode.class
 io/webaa/sdk/event/EventEmitter.class
+io/webaa/sdk/WebAASDK$8.class
 io/webaa/sdk/model/InitOptions$Builder.class
 io/webaa/sdk/WebAASDK$3.class
 io/webaa/sdk/WebAASDK$6.class

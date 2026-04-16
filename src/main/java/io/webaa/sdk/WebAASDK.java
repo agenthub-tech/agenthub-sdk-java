@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * WebAA Java SDK — headless AG-UI protocol client.
@@ -27,6 +28,7 @@ public class WebAASDK {
     private static final String DEFAULT_PROTOCOL_VERSION = "1.0.0";
     private static final int CONNECT_TIMEOUT_MS = 10_000;
     private static final int READ_TIMEOUT_MS = 0; // no read timeout for SSE
+    private static final String MULTIPART_BOUNDARY = "----WebAASDKBoundary" + System.currentTimeMillis();
 
     private static final Set<String> KNOWN_EVENT_TYPES;
     static {
@@ -59,6 +61,19 @@ public class WebAASDK {
     private long retryDelayMs = 1000;
     private long heartbeatTimeoutMs = 45000;
     private final AtomicBoolean disconnected = new AtomicBoolean(false);
+
+    // Heartbeat timer
+    private final ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r, "webaa-sdk-heartbeat");
+            t.setDaemon(true);
+            return t;
+        }
+    });
+    private final AtomicReference<ScheduledFuture<?>> heartbeatFuture = new AtomicReference<ScheduledFuture<?>>();
+    // Reference to the active SSE connection so heartbeat timeout can close it
+    private final AtomicReference<HttpURLConnection> activeSSEConnection = new AtomicReference<HttpURLConnection>();
 
     // Skills
     private final ConcurrentHashMap<String, SkillDefinition> skills = new ConcurrentHashMap<String, SkillDefinition>();
@@ -132,7 +147,7 @@ public class WebAASDK {
         if (!localSkills.containsKey("dialog_skill")) {
             localSkills.put("dialog_skill", new SkillExecutor() {
                 @Override
-                public java.util.concurrent.CompletableFuture<Map<String, Object>> execute(Map<String, Object> params) {
+                public CompletableFuture<Map<String, Object>> execute(Map<String, Object> params) {
                     String action = params.get("action") != null ? params.get("action").toString() : "notify";
                     String message = params.get("message") != null ? params.get("message").toString() : "";
                     log("dialog_skill (default) | action=%s message=%s", action, message);
@@ -141,12 +156,12 @@ public class WebAASDK {
                     result.put("action", action);
                     result.put("message", message);
                     if ("confirm".equals(action)) {
-                        result.put("confirmed", true); // auto-confirm in headless mode
+                        result.put("confirmed", true);
                     } else if ("input".equals(action)) {
-                        result.put("value", ""); // no UI to collect input
+                        result.put("value", "");
                     }
                     result.put("success", true);
-                    return java.util.concurrent.CompletableFuture.completedFuture(result);
+                    return CompletableFuture.completedFuture(result);
                 }
             });
         }
@@ -155,7 +170,7 @@ public class WebAASDK {
         if (!localSkills.containsKey("wait_skill")) {
             localSkills.put("wait_skill", new SkillExecutor() {
                 @Override
-                public java.util.concurrent.CompletableFuture<Map<String, Object>> execute(Map<String, Object> params) {
+                public CompletableFuture<Map<String, Object>> execute(Map<String, Object> params) {
                     String condition = params.get("condition") != null ? params.get("condition").toString() : "duration";
                     int timeoutMs = 5000;
                     if (params.get("timeout_ms") instanceof Number) {
@@ -166,11 +181,10 @@ public class WebAASDK {
                     if ("duration".equals(condition)) {
                         try { Thread.sleep(Math.min(timeoutMs, 30000)); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                     }
-                    // For element_visible/element_hidden: no DOM in headless, just return success
                     Map<String, Object> result = new HashMap<String, Object>();
                     result.put("success", true);
                     result.put("condition", condition);
-                    return java.util.concurrent.CompletableFuture.completedFuture(result);
+                    return CompletableFuture.completedFuture(result);
                 }
             });
         }
@@ -179,19 +193,18 @@ public class WebAASDK {
         if (!localSkills.containsKey("http_skill")) {
             localSkills.put("http_skill", new SkillExecutor() {
                 @Override
-                public java.util.concurrent.CompletableFuture<Map<String, Object>> execute(Map<String, Object> params) {
+                public CompletableFuture<Map<String, Object>> execute(Map<String, Object> params) {
                     String method = params.get("method") != null ? params.get("method").toString() : "GET";
                     String url = params.get("url") != null ? params.get("url").toString() : "";
                     log("http_skill (default) | %s %s", method, url);
 
                     Map<String, Object> result = new HashMap<String, Object>();
                     try {
-                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
                         conn.setRequestMethod(method);
                         conn.setConnectTimeout(10000);
                         conn.setReadTimeout(10000);
 
-                        // Set headers if provided
                         if (params.get("headers") instanceof Map) {
                             @SuppressWarnings("unchecked")
                             Map<String, String> headers = (Map<String, String>) params.get("headers");
@@ -200,12 +213,11 @@ public class WebAASDK {
                             }
                         }
 
-                        // Send body for POST/PUT/PATCH
                         if (params.get("body") != null && ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method))) {
                             conn.setDoOutput(true);
                             conn.setRequestProperty("Content-Type", "application/json");
-                            try (java.io.OutputStream os = conn.getOutputStream()) {
-                                os.write(params.get("body").toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                            try (OutputStream os = conn.getOutputStream()) {
+                                os.write(params.get("body").toString().getBytes(StandardCharsets.UTF_8));
                             }
                         }
 
@@ -213,22 +225,15 @@ public class WebAASDK {
                         result.put("success", status >= 200 && status < 300);
                         result.put("status", status);
 
-                        // Read response
-                        java.io.InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
+                        InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
                         if (is != null) {
-                            java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8));
-                            StringBuilder sb = new StringBuilder();
-                            char[] buf = new char[4096];
-                            int n;
-                            while ((n = reader.read(buf)) != -1) sb.append(buf, 0, n);
-                            reader.close();
-                            result.put("data", sb.toString());
+                            result.put("data", readFully(is));
                         }
                     } catch (Exception e) {
                         result.put("success", false);
                         result.put("error", e.getMessage());
                     }
-                    return java.util.concurrent.CompletableFuture.completedFuture(result);
+                    return CompletableFuture.completedFuture(result);
                 }
             });
         }
@@ -272,6 +277,9 @@ public class WebAASDK {
                 meta.put("schema", s.getSchema());
                 meta.put("prompt_injection", s.getPromptInjection());
                 meta.put("execution_mode", s.getExecutionMode());
+                if (s.getResultCacheFields() != null && !s.getResultCacheFields().isEmpty()) {
+                    meta.put("result_cache_fields", s.getResultCacheFields());
+                }
                 skillsMeta.add(meta);
             }
             Map<String, Object> body = new LinkedHashMap<String, Object>();
@@ -290,6 +298,38 @@ public class WebAASDK {
             throw e;
         } catch (Exception e) {
             throw new WebAAException("Register failed", e);
+        }
+    }
+
+    // ── Heartbeat ──
+
+    private void resetHeartbeat(final RunOptions options, final EventEmitter emitter, final int retryCount) {
+        clearHeartbeat();
+        if (disconnected.get()) return;
+        ScheduledFuture<?> future = heartbeatScheduler.schedule(new Runnable() {
+            @Override
+            public void run() {
+                if (disconnected.get()) return;
+                log("heartbeat timeout | %dms elapsed with no data", heartbeatTimeoutMs);
+                // Close the active SSE connection to unblock the reading thread
+                HttpURLConnection conn = activeSSEConnection.getAndSet(null);
+                if (conn != null) {
+                    try { conn.disconnect(); } catch (Exception ignored) {}
+                }
+                if (retryCount < maxRetries) {
+                    scheduleReconnect(options, emitter, retryCount);
+                } else {
+                    emitError(emitter, new WebAAException("Heartbeat timeout: no events received"));
+                }
+            }
+        }, heartbeatTimeoutMs, TimeUnit.MILLISECONDS);
+        heartbeatFuture.set(future);
+    }
+
+    private void clearHeartbeat() {
+        ScheduledFuture<?> future = heartbeatFuture.getAndSet(null);
+        if (future != null) {
+            future.cancel(false);
         }
     }
 
@@ -342,16 +382,27 @@ public class WebAASDK {
                 body.put("thread_id", threadId);
             }
 
-            String jsonBody = mapper.writeValueAsString(body);
+            boolean hasFiles = options.getFiles() != null && !options.getFiles().isEmpty();
 
             HttpURLConnection conn = openConnection(apiBase + "/api/agent/run");
             conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Authorization", "Bearer " + accessToken);
             conn.setDoOutput(true);
             conn.setReadTimeout(0); // SSE — no read timeout
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+
+            if (hasFiles) {
+                // Multipart request with files
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + MULTIPART_BOUNDARY);
+                try (OutputStream os = conn.getOutputStream()) {
+                    writeMultipartBody(os, body, options.getFiles());
+                }
+            } else {
+                // JSON request (no files, backward compatible)
+                conn.setRequestProperty("Content-Type", "application/json");
+                String jsonBody = mapper.writeValueAsString(body);
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+                }
             }
 
             int status = conn.getResponseCode();
@@ -387,9 +438,13 @@ public class WebAASDK {
                 return;
             }
 
+            // Store connection reference for heartbeat timeout to close
+            activeSSEConnection.set(conn);
             parseSSEStream(conn.getInputStream(), emitter, options, retryCount);
 
         } catch (Exception e) {
+            clearHeartbeat();
+            activeSSEConnection.set(null);
             if (disconnected.get()) return;
             log("sse-exception | %s", e.getMessage());
             if (retryCount < maxRetries && !disconnected.get()) {
@@ -400,9 +455,11 @@ public class WebAASDK {
         }
     }
 
-    private void parseSSEStream(InputStream stream, EventEmitter emitter, RunOptions options, int retryCount) {
+    private void parseSSEStream(InputStream stream, final EventEmitter emitter, final RunOptions options, final int retryCount) {
+        resetHeartbeat(options, emitter, retryCount);
+
         try {
-            SSEParser.parse(stream, new java.util.function.Consumer<AGUIEvent>() {
+            SSEParser.ParseResult parseResult = SSEParser.parse(stream, new java.util.function.Consumer<AGUIEvent>() {
                 @Override
                 public void accept(AGUIEvent event) {
                     if (disconnected.get()) return;
@@ -439,8 +496,26 @@ public class WebAASDK {
                         handleSkillExecution(event, emitter);
                     }
                 }
+            }, new Runnable() {
+                @Override
+                public void run() {
+                    // Reset heartbeat on every data received from stream
+                    resetHeartbeat(options, emitter, retryCount);
+                }
             });
+
+            clearHeartbeat();
+            activeSSEConnection.set(null);
+
+            // Abnormal stream end: stream closed without RunFinished/Error — retry
+            if (!parseResult.receivedTerminal && !disconnected.get() && retryCount < maxRetries) {
+                log("sse-abnormal-end | stream ended without terminal event, reconnecting");
+                scheduleReconnect(options, emitter, retryCount);
+            }
+
         } catch (Exception e) {
+            clearHeartbeat();
+            activeSSEConnection.set(null);
             if (disconnected.get()) return;
             if (retryCount < maxRetries && !disconnected.get()) {
                 scheduleReconnect(options, emitter, retryCount);
@@ -458,6 +533,7 @@ public class WebAASDK {
                 : Collections.<String, Object>emptyMap();
         String toolCallId = event.payloadString("tool_call_id");
 
+        // Skill lookup: init-registered skills take priority over localSkills
         SkillExecutor skillExecutor = null;
         SkillDefinition skillDef = skills.get(skillName);
         if (skillDef != null) {
@@ -501,6 +577,14 @@ public class WebAASDK {
         emitter.emit("ToolCallEnd", toolCallEnd);
         emitter.emit("event", toolCallEnd);
 
+        // Refresh token before resume (skill execution may take long, token could expire)
+        try {
+            acquireToken();
+            log("token refreshed before resume");
+        } catch (Exception e) {
+            log("token refresh failed before resume: %s", e.getMessage());
+        }
+
         // Follow-up run
         RunOptions resumeOptions = RunOptions.builder("")
                 .runId(this.runId)
@@ -529,6 +613,51 @@ public class WebAASDK {
         payload.put("message", msg);
         AGUIEvent errorEvent = new AGUIEvent("Error", payload, protocolVersion, new Date().toString());
         emitter.emit("error", errorEvent);
+    }
+
+    // ── Multipart Upload ──
+
+    private void writeMultipartBody(OutputStream os, Map<String, Object> fields, List<java.io.File> files) throws Exception {
+        PrintWriter writer = new PrintWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8), true);
+        String lineEnd = "\r\n";
+
+        // Write text fields
+        for (Map.Entry<String, Object> entry : fields.entrySet()) {
+            String value = entry.getValue() instanceof String
+                    ? (String) entry.getValue()
+                    : mapper.writeValueAsString(entry.getValue());
+            writer.append("--").append(MULTIPART_BOUNDARY).append(lineEnd);
+            writer.append("Content-Disposition: form-data; name=\"").append(entry.getKey()).append("\"").append(lineEnd);
+            writer.append("Content-Type: text/plain; charset=UTF-8").append(lineEnd);
+            writer.append(lineEnd);
+            writer.append(value).append(lineEnd);
+            writer.flush();
+        }
+
+        // Write file parts
+        for (java.io.File file : files) {
+            writer.append("--").append(MULTIPART_BOUNDARY).append(lineEnd);
+            writer.append("Content-Disposition: form-data; name=\"files\"; filename=\"")
+                    .append(file.getName()).append("\"").append(lineEnd);
+            writer.append("Content-Type: application/octet-stream").append(lineEnd);
+            writer.append(lineEnd);
+            writer.flush();
+
+            try (FileInputStream fis = new FileInputStream(file)) {
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = fis.read(buf)) != -1) {
+                    os.write(buf, 0, n);
+                }
+            }
+            os.flush();
+            writer.append(lineEnd);
+            writer.flush();
+        }
+
+        // Closing boundary
+        writer.append("--").append(MULTIPART_BOUNDARY).append("--").append(lineEnd);
+        writer.flush();
     }
 
     // ── Identify ──
@@ -650,6 +779,11 @@ public class WebAASDK {
     public void disconnect() {
         log("disconnect");
         disconnected.set(true);
+        clearHeartbeat();
+        HttpURLConnection conn = activeSSEConnection.getAndSet(null);
+        if (conn != null) {
+            try { conn.disconnect(); } catch (Exception ignored) {}
+        }
     }
 
     public void reset() {

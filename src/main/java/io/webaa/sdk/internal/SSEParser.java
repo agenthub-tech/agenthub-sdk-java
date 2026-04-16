@@ -22,18 +22,47 @@ public class SSEParser {
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     /**
+     * Result of parsing an SSE stream.
+     */
+    public static class ParseResult {
+        public final boolean receivedTerminal;
+
+        public ParseResult(boolean receivedTerminal) {
+            this.receivedTerminal = receivedTerminal;
+        }
+    }
+
+    /**
      * Parse an SSE input stream, invoking the callback for each successfully parsed event.
      * Blocks until the stream ends or is interrupted.
      *
      * @param inputStream the SSE response body
      * @param onEvent     callback for each parsed AGUIEvent
+     * @return ParseResult indicating whether a terminal event (RunFinished/Error) was received
      */
-    public static void parse(InputStream inputStream, Consumer<AGUIEvent> onEvent) throws Exception {
+    public static ParseResult parse(InputStream inputStream, Consumer<AGUIEvent> onEvent) throws Exception {
+        return parse(inputStream, onEvent, null);
+    }
+
+    /**
+     * Parse an SSE input stream with an optional onData callback for heartbeat resets.
+     *
+     * @param inputStream the SSE response body
+     * @param onEvent     callback for each parsed AGUIEvent
+     * @param onData      called whenever data is received from the stream (for heartbeat reset); may be null
+     * @return ParseResult indicating whether a terminal event (RunFinished/Error) was received
+     */
+    public static ParseResult parse(InputStream inputStream, Consumer<AGUIEvent> onEvent, Runnable onData) throws Exception {
+        boolean receivedTerminal = false;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             StringBuilder dataBuffer = new StringBuilder();
             String line;
 
             while ((line = reader.readLine()) != null) {
+                if (onData != null) {
+                    onData.run();
+                }
+
                 if (line.isEmpty()) {
                     // Blank line = end of event
                     if (dataBuffer.length() > 0) {
@@ -41,6 +70,10 @@ public class SSEParser {
                         dataBuffer.setLength(0);
                         try {
                             AGUIEvent event = MAPPER.readValue(json, AGUIEvent.class);
+                            String type = event.getType();
+                            if ("RunFinished".equals(type) || "Error".equals(type)) {
+                                receivedTerminal = true;
+                            }
                             onEvent.accept(event);
                         } catch (Exception ignored) {
                             // Skip malformed JSON (same as JS SDK)
@@ -56,11 +89,16 @@ public class SSEParser {
             if (dataBuffer.length() > 0) {
                 try {
                     AGUIEvent event = MAPPER.readValue(dataBuffer.toString(), AGUIEvent.class);
+                    String type = event.getType();
+                    if ("RunFinished".equals(type) || "Error".equals(type)) {
+                        receivedTerminal = true;
+                    }
                     onEvent.accept(event);
                 } catch (Exception ignored) {
                 }
             }
         }
+        return new ParseResult(receivedTerminal);
     }
 
     /**
