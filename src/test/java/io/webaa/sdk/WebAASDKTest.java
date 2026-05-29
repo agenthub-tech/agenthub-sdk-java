@@ -243,12 +243,14 @@ class WebAASDKTest {
                 .runId("r-1")
                 .threadId("t-1")
                 .toolResult(mapOf("tool_call_id", "tc-1"))
+                .reasoning(ReasoningOptions.builder().mode("on").build())
                 .build();
 
         assertEquals("hello", opts.getUserInput());
         assertEquals("r-1", opts.getRunId());
         assertEquals("t-1", opts.getThreadId());
         assertNotNull(opts.getToolResult());
+        assertEquals("on", opts.getReasoning().getMode());
     }
 
     @Test

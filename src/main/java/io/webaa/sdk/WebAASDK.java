@@ -375,6 +375,7 @@ public class WebAASDK {
 
             if (options.getRunId() != null) body.put("run_id", options.getRunId());
             if (options.getToolResult() != null) body.put("tool_result", options.getToolResult());
+            if (options.getReasoning() != null) body.put("reasoning", options.getReasoning().toMap());
             if (userId != null) body.put("user_id", userId);
             if (options.getThreadId() != null) {
                 body.put("thread_id", options.getThreadId());
@@ -493,7 +494,7 @@ public class WebAASDK {
 
                     if ("SkillExecuteInstruction".equals(event.getType())) {
                         log("event SkillExecuteInstruction | skill=%s toolCallId=%s", event.payloadString("skill_name"), event.payloadString("tool_call_id"));
-                        handleSkillExecution(event, emitter);
+                        handleSkillExecution(event, emitter, options);
                     }
                 }
             }, new Runnable() {
@@ -526,7 +527,7 @@ public class WebAASDK {
     }
 
     @SuppressWarnings("unchecked")
-    private void handleSkillExecution(AGUIEvent event, EventEmitter emitter) {
+    private void handleSkillExecution(AGUIEvent event, EventEmitter emitter, RunOptions options) {
         String skillName = event.payloadString("skill_name");
         Map<String, Object> params = event.getPayload().containsKey("params")
                 ? (Map<String, Object>) event.getPayload().get("params")
@@ -589,6 +590,7 @@ public class WebAASDK {
         RunOptions resumeOptions = RunOptions.builder("")
                 .runId(this.runId)
                 .toolResult(toolResult)
+                .reasoning(options.getReasoning())
                 .build();
         startSSEStream(resumeOptions, emitter, 0, false);
     }
