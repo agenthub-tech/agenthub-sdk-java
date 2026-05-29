@@ -1,10 +1,12 @@
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/model/RunOptions.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/model/SkillDefinition.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/cache/SkillCache.java
+/Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/model/ReasoningOptions.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/model/InitOptions.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/model/SkillCachePolicy.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/model/UserIdentity.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/skill/SkillExecutor.java
+/Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/AgentHubSDK.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/WebAASDK.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/internal/SSEParser.java
 /Users/liliangzhe/vscodeProjects/WebAA/sdks/java/src/main/java/io/webaa/sdk/model/ChannelConfig.java

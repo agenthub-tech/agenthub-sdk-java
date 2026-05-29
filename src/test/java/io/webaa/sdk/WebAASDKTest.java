@@ -32,6 +32,12 @@ class WebAASDKTest {
         return Collections.<String, Object>emptyMap();
     }
 
+    @Test
+    void agentHubSdk_aliasExtendsWebAASDK() {
+        AgentHubSDK sdk = new AgentHubSDK();
+        assertTrue(sdk instanceof WebAASDK);
+    }
+
     // ── SSEParser Tests ──
 
     @Test
@@ -234,6 +240,20 @@ class WebAASDKTest {
         assertEquals("sdk", skill.getExecutionMode());
         assertNull(skill.getPromptInjection());
         assertFalse(skill.getCachePolicy().isEnabled());
+    }
+
+    @Test
+    void skillDefinition_builderWithNonSummaryResultFields() {
+        SkillDefinition skill = SkillDefinition.builder(
+                "test", mapOf("type", "function"), new SkillExecutor() {
+                    @Override
+                    public CompletableFuture<Map<String, Object>> execute(Map<String, Object> params) {
+                        return CompletableFuture.completedFuture(emptyMap());
+                    }
+                }
+        ).nonSummaryResultFields(Arrays.asList("object_id", "files[*].path")).build();
+
+        assertEquals(Arrays.asList("object_id", "files[*].path"), skill.getNonSummaryResultFields());
     }
 
     @Test

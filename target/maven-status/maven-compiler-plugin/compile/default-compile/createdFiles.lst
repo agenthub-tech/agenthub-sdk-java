@@ -16,6 +16,7 @@ io/webaa/sdk/WebAASDK$HttpResult.class
 io/webaa/sdk/model/RunOptions$Builder.class
 io/webaa/sdk/WebAASDK$5.class
 io/webaa/sdk/WebAASDK.class
+io/webaa/sdk/model/ReasoningOptions$1.class
 io/webaa/sdk/model/SkillDefinition$1.class
 io/webaa/sdk/cache/SkillCache$Freshness.class
 io/webaa/sdk/model/SkillCachePolicy$Mode.class

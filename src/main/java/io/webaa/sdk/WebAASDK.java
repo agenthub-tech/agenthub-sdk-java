@@ -280,6 +280,9 @@ public class WebAASDK {
                 if (s.getResultCacheFields() != null && !s.getResultCacheFields().isEmpty()) {
                     meta.put("result_cache_fields", s.getResultCacheFields());
                 }
+                if (s.getNonSummaryResultFields() != null && !s.getNonSummaryResultFields().isEmpty()) {
+                    meta.put("non_summary_result_fields", s.getNonSummaryResultFields());
+                }
                 skillsMeta.add(meta);
             }
             Map<String, Object> body = new LinkedHashMap<String, Object>();

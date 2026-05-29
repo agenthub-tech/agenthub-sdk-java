@@ -18,6 +18,7 @@ public class SkillDefinition {
     private final SkillExecutor executor;
     private final SkillCachePolicy cachePolicy;
     private final List<Map<String, Object>> resultCacheFields;
+    private final List<String> nonSummaryResultFields;
 
     private SkillDefinition(Builder builder) {
         this.name = builder.name;
@@ -27,6 +28,7 @@ public class SkillDefinition {
         this.executor = builder.executor;
         this.cachePolicy = builder.cachePolicy;
         this.resultCacheFields = builder.resultCacheFields;
+        this.nonSummaryResultFields = builder.nonSummaryResultFields;
     }
 
     public String getName() { return name; }
@@ -36,6 +38,7 @@ public class SkillDefinition {
     public SkillExecutor getExecutor() { return executor; }
     public SkillCachePolicy getCachePolicy() { return cachePolicy; }
     public List<Map<String, Object>> getResultCacheFields() { return resultCacheFields; }
+    public List<String> getNonSummaryResultFields() { return nonSummaryResultFields; }
 
     public static Builder builder(String name, Map<String, Object> schema, SkillExecutor executor) {
         return new Builder(name, schema, executor);
@@ -49,6 +52,7 @@ public class SkillDefinition {
         private String executionMode = "sdk";
         private SkillCachePolicy cachePolicy = SkillCachePolicy.disabled();
         private List<Map<String, Object>> resultCacheFields;
+        private List<String> nonSummaryResultFields;
 
         private Builder(String name, Map<String, Object> schema, SkillExecutor executor) {
             this.name = name;
@@ -73,6 +77,11 @@ public class SkillDefinition {
 
         public Builder resultCacheFields(List<Map<String, Object>> resultCacheFields) {
             this.resultCacheFields = resultCacheFields;
+            return this;
+        }
+
+        public Builder nonSummaryResultFields(List<String> nonSummaryResultFields) {
+            this.nonSummaryResultFields = nonSummaryResultFields;
             return this;
         }
 
