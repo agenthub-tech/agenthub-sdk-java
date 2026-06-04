@@ -260,7 +260,7 @@ public class WebAASDK {
 
     private ChannelConfig fetchChannelConfig() {
         try {
-            HttpResult resp = doGet(apiBase + "/api/config");
+            HttpResult resp = doGetWithRefresh(apiBase + "/api/config");
             if (resp.status != 200) return null;
             return mapper.readValue(resp.body, ChannelConfig.class);
         } catch (Exception e) {
@@ -289,7 +289,7 @@ public class WebAASDK {
             body.put("skills", skillsMeta);
             body.put("protocol_version", protocolVersion);
 
-            HttpResult resp = postJson(apiBase + "/api/sdk/register", body, accessToken);
+            HttpResult resp = postJsonWithRefresh(apiBase + "/api/sdk/register", body);
             if (resp.status != 200) {
                 String detail = extractDetail(resp.body, resp.status);
                 throw new WebAAException(resp.status, "Register failed (" + resp.status + "): " + detail);
@@ -678,7 +678,7 @@ public class WebAASDK {
             body.put("avatar", user.getAvatar());
             body.put("metadata", user.getMetadata() != null ? user.getMetadata() : Collections.emptyMap());
 
-            HttpResult resp = postJson(apiBase + "/api/sdk/identify", body, accessToken);
+            HttpResult resp = postJsonWithRefresh(apiBase + "/api/sdk/identify", body);
             if (resp.status != 200) {
                 String detail = extractDetail(resp.body, resp.status);
                 throw new WebAAException(resp.status, "Identify failed (" + resp.status + "): " + detail);
@@ -707,7 +707,7 @@ public class WebAASDK {
             body.put("user_id", userId);
             body.put("title", title);
 
-            HttpResult resp = postJson(apiBase + "/api/sdk/threads", body, accessToken);
+            HttpResult resp = postJsonWithRefresh(apiBase + "/api/sdk/threads", body);
             if (resp.status != 200) {
                 String detail = extractDetail(resp.body, resp.status);
                 throw new WebAAException(resp.status, "Create thread failed: " + detail);
@@ -745,7 +745,7 @@ public class WebAASDK {
         this.threadId = threadId;
 
         try {
-            HttpResult resp = doGet(apiBase + "/api/sdk/threads/" + threadId);
+            HttpResult resp = doGetWithRefresh(apiBase + "/api/sdk/threads/" + threadId);
             if (resp.status != 200) {
                 String detail = extractDetail(resp.body, resp.status);
                 throw new WebAAException(resp.status, "Switch thread failed: " + detail);
@@ -763,7 +763,7 @@ public class WebAASDK {
         if (userId == null || accessToken == null) return Collections.emptyList();
         try {
             String url = apiBase + "/api/sdk/threads?user_id=" + userId + "&limit=" + limit + "&offset=" + offset;
-            HttpResult resp = doGet(url);
+            HttpResult resp = doGetWithRefresh(url);
             if (resp.status != 200) return Collections.emptyList();
             return mapper.readValue(resp.body, List.class);
         } catch (Exception e) {
@@ -854,6 +854,21 @@ public class WebAASDK {
         return new HttpResult(status, respBody);
     }
 
+    private HttpResult postJsonWithRefresh(String url, Object body) throws Exception {
+        return postJsonWithRefresh(url, body, false);
+    }
+
+    private HttpResult postJsonWithRefresh(String url, Object body, boolean isRetryAfterRefresh) throws Exception {
+        if (accessToken == null) throw new WebAAException("SDK not initialized");
+
+        HttpResult resp = postJson(url, body, accessToken);
+        if (resp.status == 401 && !isRetryAfterRefresh) {
+            acquireToken();
+            return postJsonWithRefresh(url, body, true);
+        }
+        return resp;
+    }
+
     private HttpResult doGet(String url) throws Exception {
         HttpURLConnection conn = openConnection(url);
         conn.setRequestMethod("GET");
@@ -865,6 +880,21 @@ public class WebAASDK {
         InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
         String respBody = readFully(is);
         return new HttpResult(status, respBody);
+    }
+
+    private HttpResult doGetWithRefresh(String url) throws Exception {
+        return doGetWithRefresh(url, false);
+    }
+
+    private HttpResult doGetWithRefresh(String url, boolean isRetryAfterRefresh) throws Exception {
+        if (accessToken == null) throw new WebAAException("SDK not initialized");
+
+        HttpResult resp = doGet(url);
+        if (resp.status == 401 && !isRetryAfterRefresh) {
+            acquireToken();
+            return doGetWithRefresh(url, true);
+        }
+        return resp;
     }
 
     private static String readFully(InputStream is) throws IOException {
