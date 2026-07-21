@@ -379,6 +379,7 @@ public class WebAASDK {
             if (options.getRunId() != null) body.put("run_id", options.getRunId());
             if (options.getToolResult() != null) body.put("tool_result", options.getToolResult());
             if (options.getReasoning() != null) body.put("reasoning", options.getReasoning().toMap());
+            if (options.getWebSearchEnabled() != null) body.put("web_search_enabled", options.getWebSearchEnabled());
             if (userId != null) body.put("user_id", userId);
             if (options.getThreadId() != null) {
                 body.put("thread_id", options.getThreadId());
@@ -594,6 +595,7 @@ public class WebAASDK {
                 .runId(this.runId)
                 .toolResult(toolResult)
                 .reasoning(options.getReasoning())
+                .webSearchEnabled(options.getWebSearchEnabled())
                 .build();
         startSSEStream(resumeOptions, emitter, 0, false);
     }

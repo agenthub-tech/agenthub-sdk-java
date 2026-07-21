@@ -30,7 +30,11 @@ public class Example {
                 .build()
         );
 
-        EventEmitter emitter = sdk.run(RunOptions.builder("帮我完成任务").build());
+        EventEmitter emitter = sdk.run(
+            RunOptions.builder("杭州明天天气如何？")
+                .webSearchEnabled(true)
+                .build()
+        );
 
         emitter.on("TextMessageDelta", event -> {
             Object delta = event.getPayload().get("delta");
@@ -48,5 +52,6 @@ public class Example {
 
 - Maven coordinates are `io.agenthub:agenthub-sdk`, Java package is `io.webaa.sdk`.
 - `channelKey` is required.
+- Web search is off by default. Set `webSearchEnabled(true)` explicitly, and ensure the channel allows web search.
 - SDK-side skills must use `executionMode("sdk")`.
 - `SkillExecuteInstruction` is auto-dispatched and auto-resumed by the SDK.

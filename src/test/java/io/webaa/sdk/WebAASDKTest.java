@@ -264,6 +264,7 @@ class WebAASDKTest {
                 .threadId("t-1")
                 .toolResult(mapOf("tool_call_id", "tc-1"))
                 .reasoning(ReasoningOptions.builder().mode("on").build())
+                .webSearchEnabled(false)
                 .build();
 
         assertEquals("hello", opts.getUserInput());
@@ -271,6 +272,7 @@ class WebAASDKTest {
         assertEquals("t-1", opts.getThreadId());
         assertNotNull(opts.getToolResult());
         assertEquals("on", opts.getReasoning().getMode());
+        assertEquals(Boolean.FALSE, opts.getWebSearchEnabled());
     }
 
     @Test

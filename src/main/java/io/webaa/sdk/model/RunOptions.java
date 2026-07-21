@@ -16,6 +16,7 @@ public class RunOptions {
     private final String runId;
     private final Map<String, Object> toolResult;
     private final ReasoningOptions reasoning;
+    private final Boolean webSearchEnabled;
     private final List<File> files;
 
     private RunOptions(Builder builder) {
@@ -25,6 +26,7 @@ public class RunOptions {
         this.runId = builder.runId;
         this.toolResult = builder.toolResult;
         this.reasoning = builder.reasoning;
+        this.webSearchEnabled = builder.webSearchEnabled;
         this.files = builder.files;
     }
 
@@ -34,6 +36,7 @@ public class RunOptions {
     public String getRunId() { return runId; }
     public Map<String, Object> getToolResult() { return toolResult; }
     public ReasoningOptions getReasoning() { return reasoning; }
+    public Boolean getWebSearchEnabled() { return webSearchEnabled; }
     public List<File> getFiles() { return files; }
 
     public static Builder builder(String userInput) {
@@ -47,6 +50,7 @@ public class RunOptions {
         private String runId;
         private Map<String, Object> toolResult;
         private ReasoningOptions reasoning;
+        private Boolean webSearchEnabled;
         private List<File> files = Collections.emptyList();
 
         private Builder(String userInput) {
@@ -58,6 +62,7 @@ public class RunOptions {
         public Builder runId(String runId) { this.runId = runId; return this; }
         public Builder toolResult(Map<String, Object> toolResult) { this.toolResult = toolResult; return this; }
         public Builder reasoning(ReasoningOptions reasoning) { this.reasoning = reasoning; return this; }
+        public Builder webSearchEnabled(Boolean webSearchEnabled) { this.webSearchEnabled = webSearchEnabled; return this; }
         public Builder files(List<File> files) { this.files = files != null ? files : Collections.<File>emptyList(); return this; }
 
         public RunOptions build() { return new RunOptions(this); }
