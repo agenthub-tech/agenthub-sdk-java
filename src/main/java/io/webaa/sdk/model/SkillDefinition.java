@@ -19,6 +19,9 @@ public class SkillDefinition {
     private final SkillCachePolicy cachePolicy;
     private final List<Map<String, Object>> resultCacheFields;
     private final List<String> nonSummaryResultFields;
+    private final boolean exposedForDelegation;
+    private final String delegationRiskLevel;
+    private final List<String> availableSources;
 
     private SkillDefinition(Builder builder) {
         this.name = builder.name;
@@ -29,6 +32,9 @@ public class SkillDefinition {
         this.cachePolicy = builder.cachePolicy;
         this.resultCacheFields = builder.resultCacheFields;
         this.nonSummaryResultFields = builder.nonSummaryResultFields;
+        this.exposedForDelegation = builder.exposedForDelegation;
+        this.delegationRiskLevel = builder.delegationRiskLevel;
+        this.availableSources = builder.availableSources;
     }
 
     public String getName() { return name; }
@@ -39,6 +45,9 @@ public class SkillDefinition {
     public SkillCachePolicy getCachePolicy() { return cachePolicy; }
     public List<Map<String, Object>> getResultCacheFields() { return resultCacheFields; }
     public List<String> getNonSummaryResultFields() { return nonSummaryResultFields; }
+    public boolean isExposedForDelegation() { return exposedForDelegation; }
+    public String getDelegationRiskLevel() { return delegationRiskLevel; }
+    public List<String> getAvailableSources() { return availableSources; }
 
     public static Builder builder(String name, Map<String, Object> schema, SkillExecutor executor) {
         return new Builder(name, schema, executor);
@@ -53,6 +62,9 @@ public class SkillDefinition {
         private SkillCachePolicy cachePolicy = SkillCachePolicy.disabled();
         private List<Map<String, Object>> resultCacheFields;
         private List<String> nonSummaryResultFields;
+        private boolean exposedForDelegation = false;
+        private String delegationRiskLevel = "medium";
+        private List<String> availableSources;
 
         private Builder(String name, Map<String, Object> schema, SkillExecutor executor) {
             this.name = name;
@@ -82,6 +94,21 @@ public class SkillDefinition {
 
         public Builder nonSummaryResultFields(List<String> nonSummaryResultFields) {
             this.nonSummaryResultFields = nonSummaryResultFields;
+            return this;
+        }
+
+        public Builder exposedForDelegation(boolean exposedForDelegation) {
+            this.exposedForDelegation = exposedForDelegation;
+            return this;
+        }
+
+        public Builder delegationRiskLevel(String delegationRiskLevel) {
+            this.delegationRiskLevel = delegationRiskLevel;
+            return this;
+        }
+
+        public Builder availableSources(List<String> availableSources) {
+            this.availableSources = availableSources;
             return this;
         }
 
