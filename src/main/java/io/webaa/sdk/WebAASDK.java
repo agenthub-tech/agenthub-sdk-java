@@ -283,11 +283,6 @@ public class WebAASDK {
                 if (s.getNonSummaryResultFields() != null && !s.getNonSummaryResultFields().isEmpty()) {
                     meta.put("non_summary_result_fields", s.getNonSummaryResultFields());
                 }
-                meta.put("exposed_for_delegation", s.isExposedForDelegation());
-                meta.put("delegation_risk_level", s.getDelegationRiskLevel());
-                if (s.getAvailableSources() != null && !s.getAvailableSources().isEmpty()) {
-                    meta.put("available_sources", s.getAvailableSources());
-                }
                 skillsMeta.add(meta);
             }
             Map<String, Object> body = new LinkedHashMap<String, Object>();
@@ -779,74 +774,6 @@ public class WebAASDK {
     }
 
     public List<Map<String, Object>> listThreads() { return listThreads(20, 0); }
-
-    @SuppressWarnings("unchecked")
-    public List<DelegationTask> claimDelegations(int limit) {
-        if (accessToken == null) throw new WebAAException("SDK not initialized");
-        int safeLimit = Math.max(1, Math.min(limit, 100));
-        try {
-            HttpResult resp = doGetWithRefresh(apiBase + "/api/sdk/delegations/pending?limit=" + safeLimit);
-            if (resp.status != 200) {
-                throw new WebAAException(resp.status, "Claim delegations failed: " + extractDetail(resp.body, resp.status));
-            }
-            Map<String, Object> body = mapper.readValue(resp.body, Map.class);
-            Object rawTasks = body.get("tasks");
-            if (!(rawTasks instanceof List)) return Collections.emptyList();
-            List<DelegationTask> tasks = new ArrayList<DelegationTask>();
-            for (Object raw : (List<Object>) rawTasks) {
-                if (!(raw instanceof Map)) continue;
-                Map<String, Object> item = (Map<String, Object>) raw;
-                tasks.add(new DelegationTask(
-                        stringValue(item.get("delegation_run_id")),
-                        stringValue(item.get("target_skill")),
-                        mapValue(item.get("params")),
-                        nullableString(item.get("source_run_id")),
-                        nullableString(item.get("source_channel_id")),
-                        nullableString(item.get("target_channel_id")),
-                        mapValue(item.get("actor")),
-                        mapValue(item.get("identity")),
-                        mapValue(item.get("client_context"))));
-            }
-            return tasks;
-        } catch (WebAAException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new WebAAException("Claim delegations failed", e);
-        }
-    }
-
-    public List<DelegationTask> claimDelegations() { return claimDelegations(20); }
-
-    public boolean completeDelegation(String delegationRunId, Map<String, Object> result, String error) {
-        if (accessToken == null) throw new WebAAException("SDK not initialized");
-        try {
-            Map<String, Object> body = new LinkedHashMap<String, Object>();
-            body.put("result", result != null ? result : Collections.emptyMap());
-            body.put("error", error);
-            String encodedId = java.net.URLEncoder.encode(delegationRunId, "UTF-8");
-            HttpResult resp = postJsonWithRefresh(apiBase + "/api/sdk/delegations/" + encodedId + "/complete", body);
-            if (resp.status != 200) {
-                throw new WebAAException(resp.status, "Complete delegation failed: " + extractDetail(resp.body, resp.status));
-            }
-            Map<String, Object> response = mapper.readValue(resp.body, Map.class);
-            return Boolean.TRUE.equals(response.get("source_run_resumed"));
-        } catch (WebAAException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new WebAAException("Complete delegation failed", e);
-        }
-    }
-
-    public boolean completeDelegation(String delegationRunId, Map<String, Object> result) {
-        return completeDelegation(delegationRunId, result, null);
-    }
-
-    private static String stringValue(Object value) { return value != null ? value.toString() : ""; }
-    private static String nullableString(Object value) { return value != null ? value.toString() : null; }
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> mapValue(Object value) {
-        return value instanceof Map ? (Map<String, Object>) value : Collections.<String, Object>emptyMap();
-    }
 
     // ── Local Skills ──
 

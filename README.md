@@ -55,14 +55,4 @@ public class Example {
 - Web search is off by default. Set `webSearchEnabled(true)` explicitly, and ensure the channel allows web search.
 - SDK-side skills must use `executionMode("sdk")`.
 
-## Delegated SDK Skills
-
-Register exported skills with `exposedForDelegation(true)`, then use `claimDelegations()` and `completeDelegation()` from a long-running SDK process.
-
-```java
-for (DelegationTask task : sdk.claimDelegations(1)) {
-    Map<String, Object> result = executeLocally(task.getTargetSkill(), task.getParams());
-    sdk.completeDelegation(task.getDelegationRunId(), result);
-}
-```
 - `SkillExecuteInstruction` is auto-dispatched and auto-resumed by the SDK.
