@@ -340,6 +340,7 @@ public class WebAASDK {
                         Map<String, Object> hello = new LinkedHashMap<String, Object>();
                         hello.put("type", "provider.register");
                         hello.put("provider_id", options.getProviderId());
+                        hello.put("instance_id", options.getInstanceId() != null ? options.getInstanceId() : options.getProviderId());
                         hello.put("skills", new ArrayList<String>(skills.keySet()));
                         hello.put("capacity", Math.max(1, options.getCapacity()));
                         hello.put("runtime", options.getRuntime());
