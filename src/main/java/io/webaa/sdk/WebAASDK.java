@@ -11,11 +11,15 @@ import io.webaa.sdk.skill.SkillExecutor;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
 
 /**
  * WebAA Java SDK — headless AG-UI protocol client.
@@ -52,6 +56,9 @@ public class WebAASDK {
     private String apiBase = "";
     private String protocolVersion = DEFAULT_PROTOCOL_VERSION;
     private ChannelConfig channelConfig;
+    private String runtimeMode = "agent";
+    private WebSocketClient providerClient;
+    private InitOptions initOptions;
 
     // Debug logging
     private boolean debug = false;
@@ -108,6 +115,8 @@ public class WebAASDK {
         this.retryDelayMs = options.getRetryDelayMs();
         this.heartbeatTimeoutMs = options.getHeartbeatTimeoutMs();
         this.debug = options.isDebug();
+        this.runtimeMode = options.getRuntimeMode() != null ? options.getRuntimeMode() : "agent";
+        this.initOptions = options;
         this.disconnected.set(false);
 
         log("init start | apiBase=%s channelKey=%s protocol=%s debug=%s", apiBase, channelKey, protocolVersion, debug);
@@ -123,7 +132,7 @@ public class WebAASDK {
         log("config fetched | channelConfig=%s", channelConfig != null ? "ok" : "null");
 
         if (!options.getSkills().isEmpty()) {
-            registerSkills(options.getSkills());
+            registerSkills(options.getSkills(), options);
             log("skills registered | count=%d channelId=%s", options.getSkills().size(), channelId);
         }
 
@@ -134,6 +143,16 @@ public class WebAASDK {
 
         // Register default handlers for platform builtin SDK-side skills
         registerDefaultSkillHandlers();
+
+        if ("skill_provider".equals(runtimeMode)) {
+            if (options.getProviderId() == null || options.getProviderId().trim().isEmpty()) {
+                throw new WebAAException("skill_provider mode requires providerId");
+            }
+            if (options.getSkills().isEmpty()) {
+                throw new WebAAException("skill_provider mode requires at least one skill");
+            }
+            startSkillProvider(options);
+        }
 
         log("init complete");
     }
@@ -268,7 +287,7 @@ public class WebAASDK {
         }
     }
 
-    private void registerSkills(List<SkillDefinition> skillList) {
+    private void registerSkills(List<SkillDefinition> skillList, InitOptions options) {
         try {
             List<Map<String, Object>> skillsMeta = new ArrayList<Map<String, Object>>();
             for (SkillDefinition s : skillList) {
@@ -288,6 +307,13 @@ public class WebAASDK {
             Map<String, Object> body = new LinkedHashMap<String, Object>();
             body.put("skills", skillsMeta);
             body.put("protocol_version", protocolVersion);
+            body.put("runtime_mode", runtimeMode);
+            body.put("instance_id", options.getInstanceId());
+            body.put("provider_id", options.getProviderId());
+            body.put("capacity", Math.max(1, options.getCapacity()));
+            body.put("runtime", options.getRuntime());
+            body.put("sdk_version", SDK_VERSION);
+            body.put("metadata", options.getMetadata());
 
             HttpResult resp = postJsonWithRefresh(apiBase + "/api/sdk/register", body);
             if (resp.status != 200) {
@@ -301,6 +327,92 @@ public class WebAASDK {
             throw e;
         } catch (Exception e) {
             throw new WebAAException("Register failed", e);
+        }
+    }
+
+    private void startSkillProvider(final InitOptions options) {
+        try {
+            String wsBase = apiBase.replaceFirst("^https:", "wss:").replaceFirst("^http:", "ws:");
+            URI uri = new URI(wsBase + "/api/sdk/providers/ws?access_token=" + URLEncoder.encode(accessToken, "UTF-8"));
+            providerClient = new WebSocketClient(uri) {
+                @Override public void onOpen(ServerHandshake handshake) {
+                    try {
+                        Map<String, Object> hello = new LinkedHashMap<String, Object>();
+                        hello.put("type", "provider.register");
+                        hello.put("provider_id", options.getProviderId());
+                        hello.put("skills", new ArrayList<String>(skills.keySet()));
+                        hello.put("capacity", Math.max(1, options.getCapacity()));
+                        hello.put("runtime", options.getRuntime());
+                        hello.put("sdk_version", SDK_VERSION);
+                        hello.put("metadata", options.getMetadata());
+                        send(mapper.writeValueAsString(hello));
+                    } catch (Exception e) {
+                        close();
+                    }
+                }
+
+                @Override public void onMessage(String raw) {
+                    try {
+                        @SuppressWarnings("unchecked")
+                        final Map<String, Object> message = mapper.readValue(raw, Map.class);
+                        if (!"skill.execute".equals(message.get("type"))) return;
+                        final String executionId = String.valueOf(message.get("execution_id"));
+                        String skillName = String.valueOf(message.get("skill_name"));
+                        final SkillDefinition skill = skills.get(skillName);
+                        if (skill == null || skill.getExecutor() == null) {
+                            sendProviderError(executionId, "Skill '" + skillName + "' not registered locally");
+                            return;
+                        }
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> params = message.get("params") instanceof Map
+                            ? (Map<String, Object>) message.get("params") : Collections.<String, Object>emptyMap();
+                        skill.getExecutor().execute(params).whenComplete((result, error) -> {
+                            try {
+                                Map<String, Object> response = new LinkedHashMap<String, Object>();
+                                response.put("execution_id", executionId);
+                                if (error != null) {
+                                    response.put("type", "skill.error");
+                                    response.put("error", Collections.<String, Object>singletonMap("message", error.getMessage()));
+                                } else {
+                                    response.put("type", "skill.result");
+                                    response.put("result", result);
+                                }
+                                send(mapper.writeValueAsString(response));
+                            } catch (Exception ignored) {}
+                        });
+                    } catch (Exception ignored) {}
+                }
+
+                private void sendProviderError(String executionId, String errorMessage) {
+                    try {
+                        Map<String, Object> response = new LinkedHashMap<String, Object>();
+                        response.put("type", "skill.error");
+                        response.put("execution_id", executionId);
+                        response.put("error", Collections.<String, Object>singletonMap("message", errorMessage));
+                        send(mapper.writeValueAsString(response));
+                    } catch (Exception ignored) {}
+                }
+
+                @Override public void onClose(int code, String reason, boolean remote) {
+                    if (!disconnected.get() && initOptions != null) {
+                        sseExecutor.submit(new Runnable() {
+                            @Override public void run() {
+                                try {
+                                    Thread.sleep(retryDelayMs);
+                                    if (!disconnected.get()) {
+                                        acquireToken();
+                                        startSkillProvider(initOptions);
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+                        });
+                    }
+                }
+                @Override public void onError(Exception ex) { log("provider websocket error | %s", ex.getMessage()); }
+            };
+            providerClient.connectBlocking();
+        } catch (Exception e) {
+            throw new WebAAException("Skill Provider connection failed", e);
         }
     }
 
@@ -339,6 +451,9 @@ public class WebAASDK {
     // ── Run ──
 
     public EventEmitter run(RunOptions options) {
+        if ("skill_provider".equals(runtimeMode)) {
+            throw new WebAAException("run() is unavailable in skill_provider mode");
+        }
         EventEmitter emitter = new EventEmitter();
         disconnected.set(false);
 
@@ -790,6 +905,10 @@ public class WebAASDK {
         HttpURLConnection conn = activeSSEConnection.getAndSet(null);
         if (conn != null) {
             try { conn.disconnect(); } catch (Exception ignored) {}
+        }
+        if (providerClient != null) {
+            try { providerClient.close(); } catch (Exception ignored) {}
+            providerClient = null;
         }
     }
 

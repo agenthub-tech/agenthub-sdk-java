@@ -48,6 +48,21 @@ public class Example {
 }
 ```
 
+## Skill Provider mode
+
+```java
+sdk.init(
+    InitOptions.builder("your-channel-key")
+        .apiBase("https://your-agenthub-server")
+        .runtimeMode("skill_provider")
+        .providerId("stable-provider-id")
+        .skills(skills)
+        .build()
+);
+```
+
+The default `runtimeMode("agent")` preserves the existing `run()` behavior.
+
 ## Notes
 
 - Maven coordinates are `io.agenthub:agenthub-sdk`, Java package is `io.webaa.sdk`.

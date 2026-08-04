@@ -2,6 +2,7 @@ package io.webaa.sdk.model;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Options for {@link io.webaa.sdk.WebAASDK#init(InitOptions)}.
@@ -17,6 +18,12 @@ public class InitOptions {
     private final long retryDelayMs;
     private final long heartbeatTimeoutMs;
     private final boolean debug;
+    private final String runtimeMode;
+    private final String instanceId;
+    private final String providerId;
+    private final int capacity;
+    private final String runtime;
+    private final Map<String, Object> metadata;
 
     private InitOptions(Builder builder) {
         this.channelKey = builder.channelKey;
@@ -28,6 +35,12 @@ public class InitOptions {
         this.retryDelayMs = builder.retryDelayMs;
         this.heartbeatTimeoutMs = builder.heartbeatTimeoutMs;
         this.debug = builder.debug;
+        this.runtimeMode = builder.runtimeMode;
+        this.instanceId = builder.instanceId;
+        this.providerId = builder.providerId;
+        this.capacity = builder.capacity;
+        this.runtime = builder.runtime;
+        this.metadata = builder.metadata;
     }
 
     public String getChannelKey() { return channelKey; }
@@ -39,6 +52,12 @@ public class InitOptions {
     public long getRetryDelayMs() { return retryDelayMs; }
     public long getHeartbeatTimeoutMs() { return heartbeatTimeoutMs; }
     public boolean isDebug() { return debug; }
+    public String getRuntimeMode() { return runtimeMode; }
+    public String getInstanceId() { return instanceId; }
+    public String getProviderId() { return providerId; }
+    public int getCapacity() { return capacity; }
+    public String getRuntime() { return runtime; }
+    public Map<String, Object> getMetadata() { return metadata; }
 
     public static Builder builder(String channelKey) {
         return new Builder(channelKey);
@@ -54,6 +73,12 @@ public class InitOptions {
         private long retryDelayMs = 1000;
         private long heartbeatTimeoutMs = 45000;
         private boolean debug = false;
+        private String runtimeMode = "agent";
+        private String instanceId;
+        private String providerId;
+        private int capacity = 1;
+        private String runtime = "java";
+        private Map<String, Object> metadata = Collections.emptyMap();
 
         private Builder(String channelKey) {
             this.channelKey = channelKey;
@@ -67,6 +92,12 @@ public class InitOptions {
         public Builder retryDelayMs(long ms) { this.retryDelayMs = ms; return this; }
         public Builder heartbeatTimeoutMs(long ms) { this.heartbeatTimeoutMs = ms; return this; }
         public Builder debug(boolean debug) { this.debug = debug; return this; }
+        public Builder runtimeMode(String mode) { this.runtimeMode = mode; return this; }
+        public Builder instanceId(String id) { this.instanceId = id; return this; }
+        public Builder providerId(String id) { this.providerId = id; return this; }
+        public Builder capacity(int capacity) { this.capacity = capacity; return this; }
+        public Builder runtime(String runtime) { this.runtime = runtime; return this; }
+        public Builder metadata(Map<String, Object> metadata) { this.metadata = metadata; return this; }
 
         public InitOptions build() { return new InitOptions(this); }
     }
