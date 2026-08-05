@@ -7,6 +7,8 @@ import io.webaa.sdk.exception.WebAAException;
 import io.webaa.sdk.internal.SSEParser;
 import io.webaa.sdk.model.*;
 import io.webaa.sdk.skill.SkillExecutor;
+import io.webaa.sdk.skill.SkillExecutionContext;
+import io.webaa.sdk.skill.SkillProgressReporter;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -367,7 +369,34 @@ public class WebAASDK {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> params = message.get("params") instanceof Map
                             ? (Map<String, Object>) message.get("params") : Collections.<String, Object>emptyMap();
-                        skill.getExecutor().execute(params).whenComplete((result, error) -> {
+                        CompletableFuture<Map<String, Object>> executionFuture;
+                        if (skill.getContextExecutor() != null) {
+                            final String runId = message.get("run_id") != null ? String.valueOf(message.get("run_id")) : "";
+                            final String toolCallId = message.get("tool_call_id") != null ? String.valueOf(message.get("tool_call_id")) : "";
+                            SkillProgressReporter reporter = progress -> {
+                                try {
+                                    Map<String, Object> update = new LinkedHashMap<String, Object>();
+                                    update.put("type", "skill.progress");
+                                    update.put("execution_id", executionId);
+                                    update.put("run_id", runId);
+                                    update.put("tool_call_id", toolCallId);
+                                    update.put("progress", progress);
+                                    send(mapper.writeValueAsString(update));
+                                    return CompletableFuture.completedFuture(null);
+                                } catch (Exception e) {
+                                    CompletableFuture<Void> failed = new CompletableFuture<Void>();
+                                    failed.completeExceptionally(e);
+                                    return failed;
+                                }
+                            };
+                            executionFuture = skill.getContextExecutor().execute(
+                                params,
+                                new SkillExecutionContext(executionId, runId, toolCallId, reporter)
+                            );
+                        } else {
+                            executionFuture = skill.getExecutor().execute(params);
+                        }
+                        executionFuture.whenComplete((result, error) -> {
                             try {
                                 Map<String, Object> response = new LinkedHashMap<String, Object>();
                                 response.put("execution_id", executionId);

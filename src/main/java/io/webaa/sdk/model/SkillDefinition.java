@@ -1,6 +1,7 @@
 package io.webaa.sdk.model;
 
 import io.webaa.sdk.skill.SkillExecutor;
+import io.webaa.sdk.skill.SkillContextExecutor;
 
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ public class SkillDefinition {
     private final String promptInjection;
     private final String executionMode; // "sdk" | "backend"
     private final SkillExecutor executor;
+    private final SkillContextExecutor contextExecutor;
     private final SkillCachePolicy cachePolicy;
     private final List<Map<String, Object>> resultCacheFields;
     private final List<String> nonSummaryResultFields;
@@ -26,6 +28,7 @@ public class SkillDefinition {
         this.promptInjection = builder.promptInjection;
         this.executionMode = builder.executionMode;
         this.executor = builder.executor;
+        this.contextExecutor = builder.contextExecutor;
         this.cachePolicy = builder.cachePolicy;
         this.resultCacheFields = builder.resultCacheFields;
         this.nonSummaryResultFields = builder.nonSummaryResultFields;
@@ -36,6 +39,7 @@ public class SkillDefinition {
     public String getPromptInjection() { return promptInjection; }
     public String getExecutionMode() { return executionMode; }
     public SkillExecutor getExecutor() { return executor; }
+    public SkillContextExecutor getContextExecutor() { return contextExecutor; }
     public SkillCachePolicy getCachePolicy() { return cachePolicy; }
     public List<Map<String, Object>> getResultCacheFields() { return resultCacheFields; }
     public List<String> getNonSummaryResultFields() { return nonSummaryResultFields; }
@@ -48,6 +52,7 @@ public class SkillDefinition {
         private final String name;
         private final Map<String, Object> schema;
         private final SkillExecutor executor;
+        private SkillContextExecutor contextExecutor;
         private String promptInjection;
         private String executionMode = "sdk";
         private SkillCachePolicy cachePolicy = SkillCachePolicy.disabled();
@@ -67,6 +72,11 @@ public class SkillDefinition {
 
         public Builder executionMode(String executionMode) {
             this.executionMode = executionMode;
+            return this;
+        }
+
+        public Builder executeWithContext(SkillContextExecutor contextExecutor) {
+            this.contextExecutor = contextExecutor;
             return this;
         }
 
