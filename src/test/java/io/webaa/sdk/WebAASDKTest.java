@@ -276,6 +276,19 @@ class WebAASDKTest {
     }
 
     @Test
+    void resumeRequestIsNotRetryable() {
+        WebAASDK sdk = new WebAASDK();
+        RunOptions initial = RunOptions.builder("hello").build();
+        RunOptions resume = RunOptions.builder("")
+                .runId("r-1")
+                .toolResult(mapOf("tool_call_id", "tc-1", "result", mapOf("ok", true)))
+                .build();
+
+        assertTrue(sdk.canRetryStream(initial, 0));
+        assertFalse(sdk.canRetryStream(resume, 0));
+    }
+
+    @Test
     void aguiEvent_payloadString() {
         AGUIEvent event = new AGUIEvent("RunStarted", mapOf("run_id", "s-1", "count", 42), "1.0.0", "now");
         assertEquals("s-1", event.payloadString("run_id"));

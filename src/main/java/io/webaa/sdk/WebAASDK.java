@@ -461,10 +461,13 @@ public class WebAASDK {
                 if (conn != null) {
                     try { conn.disconnect(); } catch (Exception ignored) {}
                 }
-                if (retryCount < maxRetries) {
+                if (canRetryStream(options, retryCount)) {
                     scheduleReconnect(options, emitter, retryCount);
                 } else {
-                    emitError(emitter, new WebAAException("Heartbeat timeout: no events received"));
+                    String message = options.getToolResult() == null
+                            ? "Heartbeat timeout: no events received"
+                            : "Heartbeat timeout during run resume; tool_result was not replayed";
+                    emitError(emitter, new WebAAException(message));
                 }
             }
         }, heartbeatTimeoutMs, TimeUnit.MILLISECONDS);
@@ -579,7 +582,7 @@ public class WebAASDK {
                     return;
                 }
 
-                if (retryCount < maxRetries && !disconnected.get()) {
+                if (canRetryStream(options, retryCount)) {
                     scheduleReconnect(options, emitter, retryCount);
                     return;
                 }
@@ -597,7 +600,7 @@ public class WebAASDK {
             activeSSEConnection.set(null);
             if (disconnected.get()) return;
             log("sse-exception | %s", e.getMessage());
-            if (retryCount < maxRetries && !disconnected.get()) {
+            if (canRetryStream(options, retryCount)) {
                 scheduleReconnect(options, emitter, retryCount);
                 return;
             }
@@ -607,6 +610,7 @@ public class WebAASDK {
 
     private void parseSSEStream(InputStream stream, final EventEmitter emitter, final RunOptions options, final int retryCount) {
         resetHeartbeat(options, emitter, retryCount);
+        final AtomicBoolean handedOffToSkill = new AtomicBoolean(false);
 
         try {
             SSEParser.ParseResult parseResult = SSEParser.parse(stream, new java.util.function.Consumer<AGUIEvent>() {
@@ -643,6 +647,7 @@ public class WebAASDK {
 
                     if ("SkillExecuteInstruction".equals(event.getType())) {
                         log("event SkillExecuteInstruction | skill=%s toolCallId=%s", event.payloadString("skill_name"), event.payloadString("tool_call_id"));
+                        handedOffToSkill.set(true);
                         handleSkillExecution(event, emitter, options);
                     }
                 }
@@ -658,20 +663,25 @@ public class WebAASDK {
             activeSSEConnection.set(null);
 
             // Abnormal stream end: stream closed without RunFinished/Error — retry
-            if (!parseResult.receivedTerminal && !disconnected.get() && retryCount < maxRetries) {
-                log("sse-abnormal-end | stream ended without terminal event, reconnecting");
-                scheduleReconnect(options, emitter, retryCount);
+            if (!parseResult.receivedTerminal && !handedOffToSkill.get() && !disconnected.get()) {
+                if (canRetryStream(options, retryCount)) {
+                    log("sse-abnormal-end | stream ended without terminal event, reconnecting");
+                    scheduleReconnect(options, emitter, retryCount);
+                } else if (options.getToolResult() != null) {
+                    emitError(emitter, new WebAAException(
+                            "Run resume stream ended before completion; tool_result was not replayed"));
+                }
             }
 
         } catch (Exception e) {
             clearHeartbeat();
             activeSSEConnection.set(null);
             if (disconnected.get()) return;
-            if (retryCount < maxRetries && !disconnected.get()) {
+            if (!handedOffToSkill.get() && canRetryStream(options, retryCount)) {
                 scheduleReconnect(options, emitter, retryCount);
                 return;
             }
-            emitError(emitter, e);
+            if (!handedOffToSkill.get()) emitError(emitter, e);
         }
     }
 
@@ -757,6 +767,10 @@ public class WebAASDK {
         if (!disconnected.get()) {
             startSSEStream(options, emitter, retryCount + 1, false);
         }
+    }
+
+    boolean canRetryStream(RunOptions options, int retryCount) {
+        return options.getToolResult() == null && retryCount < maxRetries && !disconnected.get();
     }
 
     private void emitError(EventEmitter emitter, Exception e) {
