@@ -835,6 +835,7 @@ public class WebAASDK {
         try {
             Map<String, Object> body = new LinkedHashMap<String, Object>();
             body.put("user_id", user.getUserId());
+            body.put("account", user.getAccount());
             body.put("name", user.getName());
             body.put("avatar", user.getAvatar());
             body.put("metadata", user.getMetadata() != null ? user.getMetadata() : Collections.emptyMap());

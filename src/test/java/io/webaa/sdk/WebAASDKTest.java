@@ -38,6 +38,15 @@ class WebAASDKTest {
         assertTrue(sdk instanceof WebAASDK);
     }
 
+    @Test
+    void identity_supportsIndependentDomainAccountAndLegacyConstructors() {
+        UserIdentity identity = new UserIdentity("employee-123", "alice");
+        assertEquals("employee-123", identity.getUserId());
+        assertEquals("alice", identity.getAccount());
+        assertNull(new UserIdentity("legacy").getAccount());
+        assertNull(new UserIdentity("legacy", "Name", null, emptyMap()).getAccount());
+    }
+
     // ── SSEParser Tests ──
 
     @Test
